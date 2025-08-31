@@ -4,296 +4,376 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Legal Assistant</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --primary-color: #007bff;
+            --secondary-color: #6c757d;
+            --background-color: #f0f2f5;
+            --card-background: #ffffff;
+            --text-color: #333;
+            --user-bubble: #e6f2ff;
+            --assistant-bubble: #f8f9fa;
+            --error-color: #dc3545;
+        }
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            background-color: var(--background-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            padding: 1rem;
+            box-sizing: border-box;
         }
-        #chat-container::-webkit-scrollbar {
-            width: 8px;
-        }
-        #chat-container::-webkit-scrollbar-track {
-            background: #f1f5f9;
-        }
-        #chat-container::-webkit-scrollbar-thumb {
-            background: #94a3b8;
-            border-radius: 4px;
-        }
-        #chat-container::-webkit-scrollbar-thumb:hover {
-            background: #64748b;
-        }
-        .user-message {
-            background-color: #3b82f6;
-            color: white;
-            align-self: flex-end;
-        }
-        .assistant-message {
-            background-color: #e5e7eb;
-            color: #1f2937;
-            align-self: flex-start;
-        }
-        .message {
-            max-width: 80%;
-            padding: 12px;
+        .chat-container {
+            width: 100%;
+            max-width: 800px;
+            height: 90vh;
+            display: flex;
+            flex-direction: column;
+            background: var(--card-background);
             border-radius: 12px;
-            word-wrap: break-word;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+            overflow: hidden;
         }
-        .loader {
+        .chat-header {
+            background-color: #1a253c;
+            color: white;
+            padding: 1rem 1.5rem;
+            font-size: 1.25rem;
+            font-weight: 600;
+            text-align: center;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .chat-header button {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background-color 0.2s;
+        }
+        .chat-header button:hover {
+            background-color: #0056b3;
+        }
+        .chat-log {
+            flex-grow: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        .message-bubble {
+            max-width: 75%;
+            padding: 0.75rem 1rem;
+            border-radius: 18px;
+            margin-bottom: 1rem;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            line-height: 1.5;
+        }
+        .user-bubble {
+            background-color: var(--user-bubble);
+            color: #0056b3;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+        .assistant-bubble {
+            background-color: var(--assistant-bubble);
+            border: 1px solid #e0e0e0;
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+        .chat-input-area {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid #e0e0e0;
+            background-color: #fdfdfd;
+            display: flex;
+        }
+        .chat-input-area textarea {
+            flex-grow: 1;
+            padding: 0.75rem;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            resize: none;
+            height: 24px;
+            font-family: inherit;
+            font-size: 1rem;
+        }
+        .chat-input-area button {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-left: 0.5rem;
+            transition: background-color 0.2s;
+        }
+        .chat-input-area button:hover { background-color: #0056b3; }
+        .spinner {
+            align-self: center;
             border: 4px solid #f3f3f3;
-            border-top: 4px solid #3b82f6;
+            border-top: 4px solid var(--primary-color);
             border-radius: 50%;
             width: 24px;
             height: 24px;
             animation: spin 1s linear infinite;
+            display: none;
+            margin: 1rem;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0; top: 0;
+            width: 100%; height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: #fefefe;
+            padding: 2rem;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 500px;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .modal-content h2 { margin-top: 0; }
+        .modal-content input[type="text"] { width: 100%; padding: 0.5rem; box-sizing: border-box; margin-bottom: 1rem; }
+        .modal-content input[type="file"] { margin-top: 0.5rem; }
+        .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
         }
     </style>
 </head>
-<body class="bg-slate-100 flex items-center justify-center min-h-screen">
-    <div class="w-full max-w-4xl mx-auto bg-white shadow-2xl rounded-2xl flex flex-col" style="height: 90vh;">
-        <header class="bg-slate-800 text-white p-4 rounded-t-2xl shadow-lg">
-            <h1 class="text-2xl font-bold text-center">AI Legal Assistant</h1>
-        </header>
+<body>
 
-        <!-- Main Content Area -->
-        <main id="main-content" class="flex-grow p-6 flex flex-col overflow-hidden">
-            
-            <!-- Upload View -->
-            <div id="upload-view">
-                <div class="text-center mb-6">
-                    <h2 class="text-3xl font-bold text-slate-700">Begin a Secure Session</h2>
-                    <p class="text-slate-500 mt-2">Upload documents to start your analysis.</p>
-                </div>
-
-                <div class="space-y-6">
-                     <!-- File Upload Box -->
-                     <div class="bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl p-6 text-center">
-                        <label for="file-upload" class="cursor-pointer text-slate-600 font-medium">
-                            Upload from your computer (.pdf, .docx, .txt)
-                        </label>
-                        <input id="file-upload" type="file" multiple class="hidden" onchange="updateFileList()">
-                        <div id="file-list" class="mt-2 text-sm text-slate-500">No files selected.</div>
-                        <button id="process-files-btn" onclick="processFiles()" class="mt-4 bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-slate-400" disabled>
-                            Process File(s)
-                        </button>
-                    </div>
-
-                    <div class="text-center text-slate-500 font-semibold">OR</div>
-
-                    <!-- URL Upload Box -->
-                    <div class="bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl p-6 text-center">
-                        <label for="url-input" class="text-slate-600 font-medium">Enter a public document URL</label>
-                        <input id="url-input" type="text" placeholder="https://example.com/document.pdf" class="mt-2 w-full max-w-md mx-auto block border border-slate-300 rounded-md p-2 focus:ring-2 focus:ring-blue-500">
-                        <button onclick="processUrl()" class="mt-4 bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700 transition-colors">
-                            Process URL
-                        </button>
-                    </div>
-                </div>
-
-                <div id="upload-error" class="mt-6 text-red-600 text-center font-medium"></div>
-                 <div id="loader-container" class="hidden mt-6 flex justify-center items-center space-x-3">
-                    <div class="loader"></div>
-                    <span class="text-slate-600 font-medium">Processing documents, please wait...</span>
-                </div>
-            </div>
-
-            <!-- Chat View -->
-            <div id="chat-view" class="hidden flex-grow flex flex-col overflow-hidden">
-                 <div id="chat-container" class="flex-grow overflow-y-auto p-4 bg-slate-50 rounded-lg flex flex-col space-y-4">
-                    <!-- Messages will be injected here -->
-                </div>
-                <div class="mt-4 flex items-center">
-                    <input id="chat-input" type="text" placeholder="Ask a question about your documents..." class="flex-grow border border-slate-300 rounded-l-lg p-3 focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                    <button id="send-btn" class="bg-blue-600 text-white font-bold p-3 rounded-r-lg hover:bg-blue-700 transition-colors">Send</button>
-                </div>
-            </div>
-        </main>
+<div class="chat-container">
+    <div class="chat-header">
+        <span>AI Legal Assistant</span>
+        <button id="save-chat-btn">Save Chat to PDF</button>
     </div>
+    <div class="chat-log" id="chat-log">
+        <div class="assistant-bubble" id="initial-message">Please upload documents to begin.</div>
+    </div>
+    <div class="spinner" id="spinner"></div>
+    <form id="ask-form" class="chat-input-area">
+        <textarea id="question" name="question" placeholder="Ask a question about your documents..."></textarea>
+        <button type="submit">Send</button>
+    </form>
+</div>
 
-    <script>
-        const uploadView = document.getElementById('upload-view');
-        const chatView = document.getElementById('chat-view');
-        const chatContainer = document.getElementById('chat-container');
-        const chatInput = document.getElementById('chat-input');
-        const sendBtn = document.getElementById('send-btn');
-        const fileUploadInput = document.getElementById('file-upload');
-        const processFilesBtn = document.getElementById('process-files-btn');
-        const fileListDisplay = document.getElementById('file-list');
-        const loader = document.getElementById('loader-container');
-        const uploadError = document.getElementById('upload-error');
+<!-- Upload Modal -->
+<div id="uploadModal" class="modal">
+    <div class="modal-content">
+        <span class="close-button" id="closeUploadModal">&times;</span>
+        <h2>Upload Documents</h2>
+        <form id="upload-form">
+            <label for="files">Select PDF, DOCX, or TXT files:</label>
+            <input type="file" id="files" name="files" multiple accept=".pdf,.docx,.txt">
+            <br><br>
+            <button type="submit">Upload and Process</button>
+        </form>
+    </div>
+</div>
 
-        // --- File Upload Logic ---
-        function updateFileList() {
-            if (fileUploadInput.files.length > 0) {
-                fileListDisplay.textContent = `${fileUploadInput.files.length} file(s) selected.`;
-                processFilesBtn.disabled = false;
-            } else {
-                fileListDisplay.textContent = 'No files selected.';
-                processFilesBtn.disabled = true;
+<!-- Export Modal -->
+<div id="exportModal" class="modal">
+    <div class="modal-content">
+        <span class="close-button" id="closeExportModal">&times;</span>
+        <h2>Export Case Details</h2>
+        <form id="export-form">
+            <label for="case-name">Case Name:</label>
+            <input type="text" id="case-name" placeholder="e.g., Google LLC v. Oracle America, Inc.">
+            <br><br>
+            <label for="case-number">Case Number:</label>
+            <input type="text" id="case-number" placeholder="e.g., No. 18-956">
+            <br><br>
+            <div id="export-error" style="color: var(--error-color); margin-bottom: 1rem; display: none; text-align: center;"></div>
+            <button type="submit">Download PDF</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    const askForm = document.getElementById('ask-form');
+    const spinner = document.getElementById('spinner');
+    const chatLog = document.getElementById('chat-log');
+    const initialMessage = document.getElementById('initial-message');
+
+    // Modals
+    const uploadModal = document.getElementById('uploadModal');
+    const exportModal = document.getElementById('exportModal');
+    const saveChatBtn = document.getElementById('save-chat-btn');
+    const closeUploadModal = document.getElementById('closeUploadModal');
+    const closeExportModal = document.getElementById('closeExportModal');
+
+    let isReadyForQuestions = false;
+
+    // --- Show upload modal on page load ---
+    window.onload = () => {
+        uploadModal.style.display = 'flex';
+    };
+
+    // --- Modal Controls ---
+    saveChatBtn.onclick = () => { 
+        document.getElementById('export-error').style.display = 'none'; // Hide previous errors when opening
+        exportModal.style.display = 'flex'; 
+    }
+    closeUploadModal.onclick = () => { uploadModal.style.display = 'none'; }
+    closeExportModal.onclick = () => { exportModal.style.display = 'none'; }
+    window.onclick = (event) => {
+        if (event.target == uploadModal) uploadModal.style.display = 'none';
+        if (event.target == exportModal) exportModal.style.display = 'none';
+    }
+
+    function addMessage(text, type) {
+        if (initialMessage && initialMessage.parentElement) {
+            initialMessage.remove(); // Remove the initial "Please upload" message
+        }
+        const bubble = document.createElement('div');
+        bubble.className = `message-bubble ${type}-bubble`;
+        bubble.textContent = text;
+        chatLog.appendChild(bubble);
+        chatLog.scrollTop = chatLog.scrollHeight; // Auto-scroll to the bottom
+    }
+
+    // --- Handle File Upload ---
+    document.getElementById('upload-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        spinner.style.display = 'block';
+        addMessage('Processing documents... This may take a moment.', 'assistant');
+        
+        try {
+            const response = await fetch('/upload', { method: 'POST', body: formData });
+            const result = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(result.error || 'An unknown error occurred during upload.');
             }
+
+            addMessage(result.message, 'assistant');
+            
+            // Auto-populate the export form with extracted details
+            if (result.caseDetails) {
+                const caseNameInput = document.getElementById('case-name');
+                const caseNumberInput = document.getElementById('case-number');
+                
+                caseNameInput.value = result.caseDetails.caseName !== 'N/A' ? result.caseDetails.caseName : '';
+                caseNumberInput.value = result.caseDetails.caseNumber !== 'N/A' ? result.caseDetails.caseNumber : '';
+            }
+
+            isReadyForQuestions = true;
+            uploadModal.style.display = 'none';
+
+        } catch (error) {
+            addMessage(`Upload Failed: ${error.message}`, 'assistant');
+        } finally {
+            spinner.style.display = 'none';
+        }
+    });
+
+    // --- Handle Asking a Question ---
+    askForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!isReadyForQuestions) {
+            addMessage("Please upload documents first before asking a question.", 'assistant');
+            return;
+        }
+        const questionInput = document.getElementById('question');
+        const question = questionInput.value.trim();
+        if (!question) return;
+
+        addMessage(question, 'user');
+        questionInput.value = '';
+        spinner.style.display = 'block';
+
+        try {
+            const response = await fetch('/ask', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question }),
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error);
+            
+            let answerText = result.answer || "No answer found.";
+            if (result.sources && result.sources.length > 0) {
+                const sourceFiles = [...new Set(result.sources.map(s => s.source))].join(', ');
+                answerText += `\n\nSources: ${sourceFiles}`;
+            }
+            addMessage(answerText, 'assistant');
+        } catch (error) {
+            addMessage(`Error: ${error.message}`, 'assistant');
+        } finally {
+            spinner.style.display = 'none';
+        }
+    });
+
+    // --- Handle PDF Export ---
+    document.getElementById('export-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const caseName = document.getElementById('case-name').value;
+        const caseNumber = document.getElementById('case-number').value;
+        const errorDiv = document.getElementById('export-error');
+        errorDiv.style.display = 'none';
+
+        if (!caseName || !caseNumber) {
+            errorDiv.textContent = "Please provide both a Case Name and Case Number.";
+            errorDiv.style.display = 'block';
+            return;
         }
         
-        async function processFiles() {
-            const files = fileUploadInput.files;
-            if (files.length === 0) return;
+        spinner.style.display = 'block';
 
-            const formData = new FormData();
-            for (const file of files) {
-                formData.append('files', file);
-            }
-            
-            showLoader(true);
-            try {
-                const response = await fetch('/upload', {
-                    method: 'POST',
-                    body: formData,
-                });
+        try {
+            const response = await fetch('/export_pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ caseName, caseNumber }),
+            });
 
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({ error: "An unknown server error occurred." }));
-                    throw new Error(errorData.error || `Server responded with status: ${response.status}`);
-                }
-                
-                const result = await response.json();
-                switchToChatView(result.message);
-
-            } catch (error) {
-                console.error('Upload Error:', error);
-                uploadError.textContent = `Error: ${error.message}`;
-            } finally {
-                showLoader(false);
-            }
-        }
-
-        async function processUrl() {
-            const urlInput = document.getElementById('url-input');
-            const url = urlInput.value.trim();
-            if (!url) {
-                uploadError.textContent = "Please enter a URL.";
-                return;
-            };
-
-            showLoader(true);
-            try {
-                const response = await fetch('/upload_url', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: url }),
-                });
-
-                if (!response.ok) {
-                   const errorData = await response.json().catch(() => ({ error: "An unknown server error occurred." }));
-                   throw new Error(errorData.error || `Server responded with status: ${response.status}`);
-                }
-
-                const result = await response.json();
-                switchToChatView(result.message);
-
-            } catch (error) {
-                console.error('URL Process Error:', error);
-                uploadError.textContent = `Error: ${error.message}`;
-            } finally {
-                showLoader(false);
-            }
-        }
-
-
-        function showLoader(isLoading) {
-            uploadError.textContent = '';
-            if (isLoading) {
-                loader.classList.remove('hidden');
-                processFilesBtn.disabled = true;
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `case_report_${caseName.replace(/\s/g, '_')}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+                exportModal.style.display = 'none';
             } else {
-                loader.classList.add('hidden');
-                 if (fileUploadInput.files.length > 0) processFilesBtn.disabled = false;
-            }
-        }
-        
-        function switchToChatView(welcomeMessage) {
-            uploadView.classList.add('hidden');
-            chatView.classList.remove('hidden');
-            addMessage(welcomeMessage, 'assistant');
-        }
-
-        // --- Chat Logic ---
-        function addMessage(text, sender, sources = []) {
-            const messageDiv = document.createElement('div');
-            messageDiv.classList.add('message', sender === 'user' ? 'user-message' : 'assistant-message');
-            
-            let messageHTML = text.replace(/\n/g, '<br>');
-
-            if (sources.length > 0) {
-                let sourcesHTML = '<div class="mt-2 pt-2 border-t border-slate-300 text-xs">';
-                sourcesHTML += '<strong class="font-semibold">Sources:</strong> ';
-                const sourceMap = {};
-                sources.forEach(s => {
-                    if (!sourceMap[s.source]) sourceMap[s.source] = [];
-                    sourceMap[s.source].push(s.chunk_id);
-                });
-                
-                const sourceEntries = Object.entries(sourceMap).map(([file, chunks]) => {
-                    return `${file} (chunks: ${chunks.join(', ')})`;
-                });
-                sourcesHTML += sourceEntries.join('; ');
-                sourcesHTML += '</div>';
-                messageHTML += sourcesHTML;
-            }
-
-            messageDiv.innerHTML = messageHTML;
-            chatContainer.appendChild(messageDiv);
-            
-            // **THIS IS THE FIX FOR SCROLLING**
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-        }
-
-        async function sendMessage() {
-            const question = chatInput.value.trim();
-            if (!question) return;
-
-            addMessage(question, 'user');
-            chatInput.value = '';
-            
-            // Show thinking indicator
-            const thinkingDiv = document.createElement('div');
-            thinkingDiv.classList.add('message', 'assistant-message');
-            thinkingDiv.innerHTML = '<div class="flex items-center space-x-2"><div class="loader"></div><span>Thinking...</span></div>';
-            chatContainer.appendChild(thinkingDiv);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-
-            try {
-                 const response = await fetch('/ask', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ question: question }),
-                });
-
-                chatContainer.removeChild(thinkingDiv); // Remove thinking indicator
-
-                 if (!response.ok) {
-                   const errorData = await response.json().catch(() => ({ error: "An unknown server error occurred." }));
-                   throw new Error(errorData.error || `Server responded with status: ${response.status}`);
-                }
-
                 const result = await response.json();
-                addMessage(result.answer, 'assistant', result.sources);
-
-            } catch (error) {
-                 console.error('Ask Error:', error);
-                 addMessage(`Sorry, an error occurred: ${error.message}`, 'assistant');
+                throw new Error(result.error || "Failed to download PDF.");
             }
+        } catch (error) {
+            errorDiv.textContent = `Export Failed: ${error.message}`;
+            errorDiv.style.display = 'block';
+        } finally {
+            spinner.style.display = 'none';
         }
+    });
+</script>
 
-        sendBtn.addEventListener('click', sendMessage);
-        chatInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                sendMessage();
-            }
-        });
-
-    </script>
 </body>
 </html>
+

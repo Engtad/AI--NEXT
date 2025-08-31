@@ -1,108 +1,185 @@
 import os
 import logging
-from flask import Flask, request, jsonify, render_template
+import json
+from flask import Flask, request, jsonify, send_file, render_template_string
 from werkzeug.utils import secure_filename
+from io import BytesIO
+from dotenv import load_dotenv
 
-# --- FIX: Importing from original, corrected filenames ---
+# --- Load environment variables from .env file ---
+load_dotenv()
+
+# Import your existing application logic
 from file_handler import FileHandler
 from rag_pipeline import RAGPipeline
+from session_manager import SessionManager
 from settings import Settings
+from pdf_exporter import PDFExporter
 
-# --- Basic Setup ---
-app = Flask(__name__, template_folder='.') 
-logging.basicConfig(level=logging.INFO)
-
-# --- Configuration ---
+# --- Initial Setup ---
+# Load API Key from .env
 api_key = os.getenv("ANTHROPIC_API_KEY")
 if not api_key:
-    raise ValueError("ANTHROPIC_API_KEY environment variable not set in .env file.")
+    raise ValueError("ANTHROPIC_API_KEY environment variable not set. Please check your .env file.")
 
+# Configure logging using settings from config.yaml
+log_level = Settings.get('ui.log_level', 'info').upper()
+logging.basicConfig(level=log_level, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# --- Flask App Initialization ---
+app = Flask(__name__)
+
+# --- Initialize Core Components ---
+file_handler = FileHandler()
+rag_pipeline = RAGPipeline(api_key=api_key)
+session_manager = SessionManager()
+
+# Define the upload folder
 UPLOAD_FOLDER = 'uploaded_files'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# --- Initialize Core Components ---
-# WARNING: Using global variables makes the state shared across all users.
-# This is okay for a simple demo but not for a production application.
-try:
-    file_handler = FileHandler()
-    rag_pipeline = RAGPipeline(api_key=api_key)
-except Exception as e:
-    logging.error(f"FATAL: Could not initialize core components: {e}")
-    rag_pipeline = None
-
-
-# --- Web Routes ---
+# --- Web Server Routes ---
 
 @app.route('/')
 def index():
-    """Serves the main HTML page."""
-    # Assuming you have an index.html file in the same directory
-    return render_template('index.html')
+    """Serves the main index.html file."""
+    try:
+        with open('index.html', 'r', encoding='utf-8') as f:
+            return render_template_string(f.read())
+    except FileNotFoundError:
+        return "index.html not found", 404
 
 @app.route('/upload', methods=['POST'])
 def upload_files():
-    """Handles file uploads from the user's computer."""
-    global rag_pipeline
-    if not rag_pipeline:
-        return jsonify({"error": "Backend pipeline is not initialized."}), 500
-        
+    """Handles file uploads, extracts case details, and builds the vector store."""
     if 'files' not in request.files:
-        return jsonify({"error": "No file part in the request"}), 400
-
+        return jsonify({"error": "No files part in the request"}), 400
+    
     files = request.files.getlist('files')
     if not files or files[0].filename == '':
         return jsonify({"error": "No files selected"}), 400
 
-    saved_paths = []
+    filepaths = []
     for file in files:
-        if file:
-            filename = secure_filename(file.filename)
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(filepath)
-            saved_paths.append(filepath)
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+        filepaths.append(filepath)
 
     try:
-        # Re-initialize the pipeline for a fresh state with the new documents.
-        rag_pipeline = RAGPipeline(api_key=api_key)
-        
-        logging.info(f"Processing files: {saved_paths}")
-        documents = file_handler.load_documents(saved_paths)
+        documents = file_handler.load_documents(filepaths)
         if not documents:
-            return jsonify({"error": "Could not extract text from the provided documents."}), 400
+            return jsonify({"error": "Could not extract content from the documents."}), 500
             
         rag_pipeline.build_vector_store(documents)
-        
+        session_manager.start_new_session()
+        session_manager.set_loaded_documents([doc['name'] for doc in documents])
+
+        # --- Logic to extract case details ---
+        extracted_details = {"caseName": "N/A", "caseNumber": "N/A"}
+        if documents:
+            first_doc_content = documents[0].get('content', '')[:4000]
+            
+            prompt = f"""
+            From the following legal document text, identify the Case Name and the Case Number.
+            - The Case Name is typically in the format 'Plaintiff v. Defendant'.
+            - The Case Number might be labeled 'No.', 'Case No.', 'Docket No.', etc.
+            Return the answer ONLY as a valid JSON object with the keys "caseName" and "caseNumber".
+            If a value is not found, use "N/A".
+
+            Document Text:
+            "{first_doc_content}"
+            """
+            
+            try:
+                response = rag_pipeline.llm.invoke(prompt)
+                details_str = response.content
+                
+                # --- More robust JSON extraction ---
+                start_index = details_str.find('{')
+                end_index = details_str.rfind('}')
+                
+                if start_index != -1 and end_index != -1 and end_index > start_index:
+                    json_str = details_str[start_index : end_index + 1]
+                    extracted_details = json.loads(json_str)
+                else:
+                    logging.warning(f"LLM did not return a valid JSON object for case details. Response: {details_str}")
+                    extracted_details = {"caseName": "N/A", "caseNumber": "N/A"}
+
+            except Exception as e:
+                logging.error(f"Could not extract or parse case details from LLM: {e}")
+                extracted_details = {"caseName": "N/A", "caseNumber": "N/A"}
+
+        # Clean up uploaded files after processing
+        for path in filepaths:
+            os.remove(path)
+            
         return jsonify({
-            "message": f"Successfully processed {len(documents)} document(s). Ready for questions.",
-            "filenames": [doc['name'] for doc in documents]
-        })
-
+            "message": f"Successfully processed {len(documents)} documents. You can now ask questions.",
+            "caseDetails": extracted_details
+        }), 200
     except Exception as e:
-        logging.error(f"Error during file processing: {e}", exc_info=True)
-        return jsonify({"error": f"An internal error occurred: {str(e)}"}), 500
-
+        logging.error(f"Upload processing failed: {e}", exc_info=True)
+        return jsonify({"error": "An error occurred during document processing."}), 500
 
 @app.route('/ask', methods=['POST'])
 def ask_question():
-    """Handles questions from the user and returns the AI's answer."""
-    if not rag_pipeline or not rag_pipeline.qa_chain:
-        return jsonify({"error": "Knowledge base not ready. Please upload documents first."}), 400
-
+    """Receives a question and gets an answer from the RAG pipeline."""
     data = request.get_json()
     question = data.get('question')
+
     if not question:
-        return jsonify({"error": "Question is missing"}), 400
+        return jsonify({"error": "No question provided"}), 400
+    if not rag_pipeline.qa_chain:
+        return jsonify({"error": "Documents have not been processed yet."}), 400
 
     try:
         response = rag_pipeline.answer_question(question)
-        return jsonify(response)
+        session_manager.add_qa_pair(question, response)
+        return jsonify(response), 200
     except Exception as e:
-        logging.error(f"Error during question answering: {e}", exc_info=True)
-        return jsonify({"error": f"An internal error occurred while getting an answer: {str(e)}"}), 500
+        logging.error(f"Question answering failed: {e}", exc_info=True)
+        return jsonify({"error": "An error occurred while getting the answer."}), 500
 
+@app.route('/export_pdf', methods=['POST'])
+def export_pdf():
+    """Exports the current chat session to a PDF file."""
+    data = request.get_json()
+    case_details = {
+        "name": data.get("caseName"),
+        "number": data.get("caseNumber")
+    }
+
+    if not case_details["name"] or not case_details["number"]:
+        return jsonify({"error": "Case Name and Case Number are required."}), 400
+
+    try:
+        pdf_buffer = BytesIO()
+        exporter = PDFExporter(
+            history=session_manager.get_history(),
+            case_details=case_details,
+            output_path=pdf_buffer
+        )
+        exporter.generate_pdf()
+        pdf_buffer.seek(0)
+        
+        return send_file(
+            pdf_buffer,
+            as_attachment=True,
+            download_name=f"case_report_{case_details['name'].replace(' ', '_')}.pdf",
+            mimetype='application/pdf'
+        )
+    except ImportError:
+         logging.error("PDF export failed because 'reportlab' is not installed.")
+         return jsonify({"error": "PDF generation library (reportlab) not found on the server."}), 500
+    except Exception as e:
+        logging.error(f"PDF export failed: {e}", exc_info=True)
+        return jsonify({"error": "An unexpected error occurred during PDF export."}), 500
 
 if __name__ == '__main__':
+    print("Starting the AI Legal Assistant web server...")
+    print("Open your browser and navigate to http://127.0.0.1:5000")
     from waitress import serve
-    print("Server starting at http://0.0.0.0:8080")
-    serve(app, host="0.0.0.0", port=8080)
+    serve(app, host='0.0.0.0', port=5000)
+

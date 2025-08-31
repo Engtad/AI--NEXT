@@ -1,38 +1,32 @@
-Advanced RAG Legal Assistant
-This project is a sophisticated, command-line based Retrieval-Augmented Generation (RAG) application designed for legal professionals. It allows users to load, process, and ask questions about legal documents using the power of Google's Gemini large language models.
-
-This enhanced version includes session management, a rich interactive command interface, advanced error handling, and a configurable RAG pipeline.
+Advanced RAG Legal Assistant - Web Version
+This project is a sophisticated, web-based Retrieval-Augmented Generation (RAG) application designed for legal professionals. It allows users to upload, process, and ask questions about legal documents through a simple chat interface, powered by Anthropic's Claude models.
 
 Features
-Interactive Command Interface: Control the application with simple commands (ask, history, docs, reload, exit).
+Web Interface: A clean and modern chat interface for uploading documents and asking questions.
 
-Dynamic & Secure Document Loading: Load documents from local paths or URLs with progress bars, validation, and robust error handling.
+Automatic Case Detail Extraction: The AI automatically identifies the Case Name and Case Number from uploaded documents.
 
-Multi-Format Support: Handles .pdf, .docx, and .txt files.
+Dynamic Document Loading: Load documents from your local machine with support for .pdf, .docx, and .txt files.
 
-Configurable RAG Pipeline: Customize chunking, retrieval parameters, and models via a config.yaml file.
+Configurable RAG Pipeline: Customize chunking, retrieval, and models via a config.yaml file.
 
-Secure API Key Management: Uses a .env file to securely manage your Google API key.
+Secure API Key Management: Uses a .env file to securely manage your Anthropic API key.
 
-Session Management: View question history, list loaded docs, and export your entire session to a JSON file.
-
-Enhanced Responses: Get answers with source citations and a confidence score.
-
-Query Caching: Speeds up responses for repeated questions.
-
-Production-Ready Architecture: Modular, decoupled components for easy maintenance and extension.
+PDF Export: Save your entire Q&A session, including case details, to a professionally formatted PDF report.
 
 Project Structure
 legal_rag_app/
-├── main.py                   # Main application entry point and command handler
-├── file_handler.py           # Handles document loading and text extraction
-├── rag_pipeline.py           # Manages the core RAG logic (embedding, vector store, QA chain)
-├── ui_manager.py             # Manages the command-line user interface
-├── session_manager.py        # Manages session state, history, and exporting
-├── settings.py               # Loads configuration from config.yaml and .env
-├── config.yaml.template      # Template for application configuration
-├── .env.template             # Template for environment variables (API key)
-└── README.md                 # This file
+├── server.py               # Main Flask web server and API endpoints
+├── index.html              # Frontend web interface
+├── file_handler.py         # Handles document loading and text extraction
+├── rag_pipeline.py         # Manages the core RAG logic
+├── session_manager.py      # Manages session state and history
+├── pdf_exporter.py         # Handles PDF generation
+├── settings.py             # Loads configuration from config.yaml
+├── config.yaml             # Application configuration
+├── .env                    # Environment variables (API key)
+├── requirements.txt        # Python dependencies
+└── README.md               # This file
 
 Setup and Installation
 Clone the repository:
@@ -42,45 +36,44 @@ cd legal_rag_app
 
 Create a virtual environment:
 
+# On Windows
 python -m venv venv
-source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
+venv\Scripts\activate
 
-Install dependencies from requirements.txt:
+# On macOS/Linux
+python3 -m venv venv
+source venv/bin/activate
+
+Install dependencies:
 
 pip install -r requirements.txt
 
 Set up your environment:
 
-Copy the .env.template file to a new file named .env.
+Rename the .env.template file to .env.
 
-Open the .env file and add your Google API key.
+Open the .env file and add your ANTHROPIC_API_KEY.
 
-GOOGLE_API_KEY="your_api_key_here"
+How to Run the Web Application
+Start the server:
 
-Configure the application (Optional):
+Make sure your virtual environment is activated.
 
-Copy config.yaml.template to config.yaml.
+Run the server.py script from your terminal:
 
-Edit config.yaml to set your desired models, chunking strategy, etc.
+python server.py
 
-How to Run
-Execute the main script:
+Access the application:
 
-python main.py
+Open your web browser and navigate to the URL shown in the terminal, which is usually:
 
-The application will automatically find your API key in the .env file. If it doesn't, it will prompt you to enter it manually.
-
-Interact with the assistant:
-
-Provide comma-separated paths or URLs to your legal documents.
-
-Once documents are processed, type help to see all available commands.
-
-Start asking questions using ask <your question here>.
+http://127.0.0.1:5000
 
 Troubleshooting
-"Failed to initialize AI models": Your Google API key in the .env file may be invalid or have insufficient permissions.
+ImportError or ModuleNotFoundError: Your virtual environment is likely not activated, or pip install -r requirements.txt failed. Rerun the installation command.
 
-"File not found": Double-check your local file paths. For URLs, ensure they are accessible and correct.
+ValueError: ANTHROPIC_API_KEY... not set: Your .env file is missing, not named correctly, or is empty.
 
-"No content extracted": The document might be image-based (scanned) or empty. This version does not support OCR for scanned documents.
+Export Failed: PDF generation library (reportlab) not found: This means reportlab did not install correctly. Rerun pip install -r requirements.txt inside your active virtual environment.
+
+"File not found": Ensure index.html is in the same directory as server.py.

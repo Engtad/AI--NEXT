@@ -9,8 +9,12 @@ python-docx>=1.1.0
 PyYAML>=6.0
 python-dotenv>=0.21.0
 requests>=2.31.0
+tqdm>=4.62.3
 
 #Web Server Packages
 Flask>=2.3.0
 waitress>=2.1.0
 werkzeug>=2.3.0
+
+# NEW: PDF Generation Library ---
+reportlab>=4.0.0
