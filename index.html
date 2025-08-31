@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Legal Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        #chat-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        #chat-container::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        #chat-container::-webkit-scrollbar-thumb {
+            background: #94a3b8;
+            border-radius: 4px;
+        }
+        #chat-container::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+        .user-message {
+            background-color: #3b82f6;
+            color: white;
+            align-self: flex-end;
+        }
+        .assistant-message {
+            background-color: #e5e7eb;
+            color: #1f2937;
+            align-self: flex-start;
+        }
+        .message {
+            max-width: 80%;
+            padding: 12px;
+            border-radius: 12px;
+            word-wrap: break-word;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 flex items-center justify-center min-h-screen">
+    <div class="w-full max-w-4xl mx-auto bg-white shadow-2xl rounded-2xl flex flex-col" style="height: 90vh;">
+        <header class="bg-slate-800 text-white p-4 rounded-t-2xl shadow-lg">
+            <h1 class="text-2xl font-bold text-center">AI Legal Assistant</h1>
+        </header>
+
+        <!-- Main Content Area -->
+        <main id="main-content" class="flex-grow p-6 flex flex-col overflow-hidden">
+            
+            <!-- Upload View -->
+            <div id="upload-view">
+                <div class="text-center mb-6">
+                    <h2 class="text-3xl font-bold text-slate-700">Begin a Secure Session</h2>
+                    <p class="text-slate-500 mt-2">Upload documents to start your analysis.</p>
+                </div>
+
+                <div class="space-y-6">
+                     <!-- File Upload Box -->
+                     <div class="bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl p-6 text-center">
+                        <label for="file-upload" class="cursor-pointer text-slate-600 font-medium">
+                            Upload from your computer (.pdf, .docx, .txt)
+                        </label>
+                        <input id="file-upload" type="file" multiple class="hidden" onchange="updateFileList()">
+                        <div id="file-list" class="mt-2 text-sm text-slate-500">No files selected.</div>
+                        <button id="process-files-btn" onclick="processFiles()" class="mt-4 bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-slate-400" disabled>
+                            Process File(s)
+                        </button>
+                    </div>
+
+                    <div class="text-center text-slate-500 font-semibold">OR</div>
+
+                    <!-- URL Upload Box -->
+                    <div class="bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl p-6 text-center">
+                        <label for="url-input" class="text-slate-600 font-medium">Enter a public document URL</label>
+                        <input id="url-input" type="text" placeholder="https://example.com/document.pdf" class="mt-2 w-full max-w-md mx-auto block border border-slate-300 rounded-md p-2 focus:ring-2 focus:ring-blue-500">
+                        <button onclick="processUrl()" class="mt-4 bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700 transition-colors">
+                            Process URL
+                        </button>
+                    </div>
+                </div>
+
+                <div id="upload-error" class="mt-6 text-red-600 text-center font-medium"></div>
+                 <div id="loader-container" class="hidden mt-6 flex justify-center items-center space-x-3">
+                    <div class="loader"></div>
+                    <span class="text-slate-600 font-medium">Processing documents, please wait...</span>
+                </div>
+            </div>
+
+            <!-- Chat View -->
+            <div id="chat-view" class="hidden flex-grow flex flex-col overflow-hidden">
+                 <div id="chat-container" class="flex-grow overflow-y-auto p-4 bg-slate-50 rounded-lg flex flex-col space-y-4">
+                    <!-- Messages will be injected here -->
+                </div>
+                <div class="mt-4 flex items-center">
+                    <input id="chat-input" type="text" placeholder="Ask a question about your documents..." class="flex-grow border border-slate-300 rounded-l-lg p-3 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <button id="send-btn" class="bg-blue-600 text-white font-bold p-3 rounded-r-lg hover:bg-blue-700 transition-colors">Send</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const uploadView = document.getElementById('upload-view');
+        const chatView = document.getElementById('chat-view');
+        const chatContainer = document.getElementById('chat-container');
+        const chatInput = document.getElementById('chat-input');
+        const sendBtn = document.getElementById('send-btn');
+        const fileUploadInput = document.getElementById('file-upload');
+        const processFilesBtn = document.getElementById('process-files-btn');
+        const fileListDisplay = document.getElementById('file-list');
+        const loader = document.getElementById('loader-container');
+        const uploadError = document.getElementById('upload-error');
+
+        // --- File Upload Logic ---
+        function updateFileList() {
+            if (fileUploadInput.files.length > 0) {
+                fileListDisplay.textContent = `${fileUploadInput.files.length} file(s) selected.`;
+                processFilesBtn.disabled = false;
+            } else {
+                fileListDisplay.textContent = 'No files selected.';
+                processFilesBtn.disabled = true;
+            }
+        }
+        
+        async function processFiles() {
+            const files = fileUploadInput.files;
+            if (files.length === 0) return;
+
+            const formData = new FormData();
+            for (const file of files) {
+                formData.append('files', file);
+            }
+            
+            showLoader(true);
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ error: "An unknown server error occurred." }));
+                    throw new Error(errorData.error || `Server responded with status: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                switchToChatView(result.message);
+
+            } catch (error) {
+                console.error('Upload Error:', error);
+                uploadError.textContent = `Error: ${error.message}`;
+            } finally {
+                showLoader(false);
+            }
+        }
+
+        async function processUrl() {
+            const urlInput = document.getElementById('url-input');
+            const url = urlInput.value.trim();
+            if (!url) {
+                uploadError.textContent = "Please enter a URL.";
+                return;
+            };
+
+            showLoader(true);
+            try {
+                const response = await fetch('/upload_url', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: url }),
+                });
+
+                if (!response.ok) {
+                   const errorData = await response.json().catch(() => ({ error: "An unknown server error occurred." }));
+                   throw new Error(errorData.error || `Server responded with status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                switchToChatView(result.message);
+
+            } catch (error) {
+                console.error('URL Process Error:', error);
+                uploadError.textContent = `Error: ${error.message}`;
+            } finally {
+                showLoader(false);
+            }
+        }
+
+
+        function showLoader(isLoading) {
+            uploadError.textContent = '';
+            if (isLoading) {
+                loader.classList.remove('hidden');
+                processFilesBtn.disabled = true;
+            } else {
+                loader.classList.add('hidden');
+                 if (fileUploadInput.files.length > 0) processFilesBtn.disabled = false;
+            }
+        }
+        
+        function switchToChatView(welcomeMessage) {
+            uploadView.classList.add('hidden');
+            chatView.classList.remove('hidden');
+            addMessage(welcomeMessage, 'assistant');
+        }
+
+        // --- Chat Logic ---
+        function addMessage(text, sender, sources = []) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message', sender === 'user' ? 'user-message' : 'assistant-message');
+            
+            let messageHTML = text.replace(/\n/g, '<br>');
+
+            if (sources.length > 0) {
+                let sourcesHTML = '<div class="mt-2 pt-2 border-t border-slate-300 text-xs">';
+                sourcesHTML += '<strong class="font-semibold">Sources:</strong> ';
+                const sourceMap = {};
+                sources.forEach(s => {
+                    if (!sourceMap[s.source]) sourceMap[s.source] = [];
+                    sourceMap[s.source].push(s.chunk_id);
+                });
+                
+                const sourceEntries = Object.entries(sourceMap).map(([file, chunks]) => {
+                    return `${file} (chunks: ${chunks.join(', ')})`;
+                });
+                sourcesHTML += sourceEntries.join('; ');
+                sourcesHTML += '</div>';
+                messageHTML += sourcesHTML;
+            }
+
+            messageDiv.innerHTML = messageHTML;
+            chatContainer.appendChild(messageDiv);
+            
+            // **THIS IS THE FIX FOR SCROLLING**
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const question = chatInput.value.trim();
+            if (!question) return;
+
+            addMessage(question, 'user');
+            chatInput.value = '';
+            
+            // Show thinking indicator
+            const thinkingDiv = document.createElement('div');
+            thinkingDiv.classList.add('message', 'assistant-message');
+            thinkingDiv.innerHTML = '<div class="flex items-center space-x-2"><div class="loader"></div><span>Thinking...</span></div>';
+            chatContainer.appendChild(thinkingDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            try {
+                 const response = await fetch('/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: question }),
+                });
+
+                chatContainer.removeChild(thinkingDiv); // Remove thinking indicator
+
+                 if (!response.ok) {
+                   const errorData = await response.json().catch(() => ({ error: "An unknown server error occurred." }));
+                   throw new Error(errorData.error || `Server responded with status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                addMessage(result.answer, 'assistant', result.sources);
+
+            } catch (error) {
+                 console.error('Ask Error:', error);
+                 addMessage(`Sorry, an error occurred: ${error.message}`, 'assistant');
+            }
+        }
+
+        sendBtn.addEventListener('click', sendMessage);
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+    </script>
+</body>
+</html>
